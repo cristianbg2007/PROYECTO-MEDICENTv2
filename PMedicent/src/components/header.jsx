@@ -1,22 +1,16 @@
-import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 function Header() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [estaLogueado, setEstaLogueado] = useState(!!localStorage.getItem('usuario'));
-
-  useEffect(() => {
-    setEstaLogueado(!!localStorage.getItem('usuario'));
-  }, [location]);
+  const estaLogueado = !!localStorage.getItem('usuario');
 
   const showFullMenu = !['/', '/inicio-sesion', '/registro', '/elegir-rol'].includes(location.pathname);
 
   const handleCerrarSesion = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
-    setEstaLogueado(false);
     navigate('/inicio-sesion');
   };
 

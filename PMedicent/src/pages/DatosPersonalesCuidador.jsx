@@ -3,24 +3,36 @@ import { useNavigate } from 'react-router-dom'
 import TarjetaFormulario from '../components/TarjetaFormulario'
 import CampoTexto from '../components/CampoTexto'
 import Button from '../components/Button'
+import API from '../api'
 
 function DatosPersonalesCuidador() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({ identificacion: '', experiencia: '', telefono_cuidador: '' })
+  const [experienciaAnios, setExperienciaAnios] = useState('')
+  const [error, setError] = useState('')
+  const [cargando, setCargando] = useState(false)
 
-  const handleChange = (e) => setForm({ ...form, [e.target.id]: e.target.value })
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    navigate('/perfil-cuidador')
+    setError('')
+    setCargando(true)
+    try {
+      await API.crearPerfilCuidador({ experienciaAnios: Number(experienciaAnios) })
+      const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
+      localStorage.setItem('usuario', JSON.stringify({ ...usuario, perfil: 'cuidador' }))
+      navigate('/dashboard')
+    } catch (err) {
+      setError(err.message || 'No se pudo guardar el perfil del cuidador.')
+    } finally {
+      setCargando(false)
+    }
   }
 
   return (
     <TarjetaFormulario titulo="Datos Profesionales del Cuidador" onSubmit={handleSubmit}>
-      <CampoTexto label="Documento de Identidad" id="identificacion" placeholder="Número de cédula" required value={form.identificacion} onChange={handleChange} />
-      <CampoTexto label="Años de Experiencia" id="experiencia" type="number" placeholder="Ej: 3" required value={form.experiencia} onChange={handleChange} />
-      <CampoTexto label="Teléfono Celular" id="telefono_cuidador" type="tel" placeholder="Número de contacto" required value={form.telefono_cuidador} onChange={handleChange} />
-      <Button texto="Crear Perfil de Cuidador" />
+      <p>Usaremos el nombre, documento, teléfono y correo que registraste en tu cuenta.</p>
+      <CampoTexto label="Años de Experiencia" id="experienciaAnios" type="number" placeholder="Ej: 3" required value={experienciaAnios} onChange={(e) => setExperienciaAnios(e.target.value)} />
+      {error && <p role="alert" style={{ color: 'red', fontSize: '0.9rem' }}>{error}</p>}
+      <Button texto={cargando ? 'Guardando...' : 'Crear Perfil de Cuidador'} />
     </TarjetaFormulario>
   )
 }

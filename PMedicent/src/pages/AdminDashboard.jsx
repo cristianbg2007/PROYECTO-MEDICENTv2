@@ -6,7 +6,7 @@ import API from '../api'
 
 function AdminDashboard() {
   const navigate = useNavigate()
-  const [usuario, setUsuario] = useState(null)
+  const usuario = JSON.parse(localStorage.getItem('usuario') || 'null')
   const [stats, setStats] = useState({
     usuarios: 0,
     medicamentos: 0,
@@ -15,7 +15,6 @@ function AdminDashboard() {
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
-    // Verificar que sea administrador
     const userData = localStorage.getItem('usuario')
     if (!userData) {
       navigate('/inicio-sesion')
@@ -29,29 +28,23 @@ function AdminDashboard() {
       return
     }
 
-    setUsuario(user)
-    cargarEstadisticas()
-  }, [navigate])
-
-  const cargarEstadisticas = async () => {
-    try {
-      const [usuarios, medicamentos, biomarcadores] = await Promise.all([
-        API.getAdminUsuarios(),
-        API.getAdminMedicamentos(),
-        API.getAdminBiomarcadores()
-      ])
-
-      setStats({
-        usuarios: usuarios.length || 0,
-        medicamentos: medicamentos.length || 0,
-        biomarcadores: biomarcadores.length || 0
-      })
-    } catch (error) {
-      console.error('Error al cargar estadísticas:', error)
-    } finally {
-      setCargando(false)
+    const cargarEstadisticas = async () => {
+      try {
+        const resumen = await API.getAdminResumen()
+        setStats({
+          usuarios: resumen.usuarios || 0,
+          medicamentos: resumen.medicamentos || 0,
+          biomarcadores: resumen.biomarcadores || 0
+        })
+      } catch (error) {
+        console.error('Error al cargar estadísticas:', error)
+      } finally {
+        setCargando(false)
+      }
     }
-  }
+
+    void cargarEstadisticas()
+  }, [navigate])
 
   const cerrarSesion = () => {
     localStorage.removeItem('token')
@@ -111,13 +104,13 @@ function AdminDashboard() {
           <div style={tarjetaEstilo}>
             <h3>Medicamentos</h3>
             <p style={numeroEstilo}>{stats.medicamentos}</p>
-            <Link to="/admin/medicamentos" style={linkEstilo}>Gestionar →</Link>
+            <Link to="/admin/medicamentos" style={linkEstilo}>Ver resumen →</Link>
           </div>
 
           <div style={tarjetaEstilo}>
             <h3>Biomarcadores</h3>
             <p style={numeroEstilo}>{stats.biomarcadores}</p>
-            <Link to="/admin/biomarcadores" style={linkEstilo}>Gestionar →</Link>
+            <Link to="/admin/biomarcadores" style={linkEstilo}>Ver resumen →</Link>
           </div>
         </div>
 
@@ -126,8 +119,8 @@ function AdminDashboard() {
           <h2>Accesos Rápidos</h2>
           <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginTop: '15px' }}>
             <Link to="/admin/usuarios" style={botonEstilo}>Ver Usuarios</Link>
-            <Link to="/admin/medicamentos" style={botonEstilo}>Ver Medicamentos</Link>
-            <Link to="/admin/biomarcadores" style={botonEstilo}>Ver Biomarcadores</Link>
+            <Link to="/admin/medicamentos" style={botonEstilo}>Medicamentos</Link>
+            <Link to="/admin/biomarcadores" style={botonEstilo}>Biomarcadores</Link>
           </div>
         </section>
       </main>
@@ -157,6 +150,7 @@ const linkEstilo = {
   textDecoration: 'none',
   fontWeight: '500'
 }
+
 
 const botonEstilo = {
   background: '#1d3b5e',

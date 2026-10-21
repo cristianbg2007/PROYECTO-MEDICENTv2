@@ -1,4 +1,12 @@
-const BASE_URL = 'http://127.0.0.1:5000/api';
+const BASE_URL = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api').replace(/\/+$/, '');
+
+const fechaLocalActual = () => {
+  const ahora = new Date()
+  const anio = ahora.getFullYear()
+  const mes = String(ahora.getMonth() + 1).padStart(2, '0')
+  const dia = String(ahora.getDate()).padStart(2, '0')
+  return `${anio}-${mes}-${dia}`
+}
 
 async function apiFetch(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
@@ -52,24 +60,74 @@ const API = {
     });
   },
 
-  async getUsuarios() {
-    return apiFetch('/usuarios');
+  async solicitarRestablecimiento(correo) {
+    return apiFetch('/password/solicitar-restablecimiento', {
+      method: 'POST',
+      body: JSON.stringify({ correo })
+    });
   },
 
-  async getUsuarioPorEmail(email) {
-    return apiFetch(`/usuarios?email=${encodeURIComponent(email)}`);
+  async restablecerContrasena(token, nuevaContrasena) {
+    return apiFetch('/password/restablecer', {
+      method: 'POST',
+      body: JSON.stringify({ token, nuevaContrasena })
+    });
+  },
+
+  async crearPerfilPaciente(perfil) {
+    return apiFetch('/perfil/paciente', { method: 'POST', body: JSON.stringify(perfil) });
+  },
+
+  async crearPerfilCuidador(perfil) {
+    return apiFetch('/perfil/cuidador', { method: 'POST', body: JSON.stringify(perfil) });
+  },
+
+  async getVinculacion() {
+    return apiFetch('/perfil/vinculacion');
+  },
+
+  async generarCodigoVinculacion() {
+    return apiFetch('/perfil/vinculacion/codigo', { method: 'POST', body: JSON.stringify({}) });
+  },
+
+  async canjearCodigoVinculacion(codigo) {
+    return apiFetch('/perfil/vinculacion/canjear', { method: 'POST', body: JSON.stringify({ codigo }) });
+  },
+
+  async desvincularCuidador(idCuidador) {
+    return apiFetch(`/perfil/vinculacion/cuidadores/${idCuidador}`, { method: 'DELETE' });
+  },
+
+  async getPerfil() {
+    return apiFetch('/perfil');
+  },
+
+  async actualizarPerfil(perfil) {
+    return apiFetch('/perfil', { method: 'PUT', body: JSON.stringify(perfil) });
   },
 
   // ==========================================
   // TOMAS DE MEDICAMENTOS
   // ==========================================
 
+  async generarReporteAdherencia(reporte) {
+    return apiFetch('/adherencia/generar', { method: 'POST', body: JSON.stringify(reporte) });
+  },
+
+  async getReportesAdherencia(idTratamiento) {
+    return apiFetch(`/adherencia/tratamiento/${idTratamiento}`);
+  },
+
+  async getUltimoReporteAdherencia() {
+    return apiFetch('/adherencia/ultimo');
+  },
+
   async getTomas() {
     return apiFetch('/tomas');
   },
 
   async getTomasHoy() {
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = fechaLocalActual();
     return apiFetch(`/tomas?fecha=${hoy}`);
   },
 
@@ -93,7 +151,7 @@ const API = {
   },
 
   async getBiomarcadoresHoy() {
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = fechaLocalActual();
     return apiFetch(`/biomarcadores?fecha=${hoy}`);
   },
 
@@ -116,11 +174,19 @@ const API = {
     return apiFetch('/inventario');
   },
 
-  async actualizarInventario(id, datos) {
-    return apiFetch(`/inventario/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(datos)
+  async actualizarInventario(idMedicamento, datos) {
+    return apiFetch('/inventario/recargar', {
+      method: 'POST',
+      body: JSON.stringify({ ...datos, idMedicamento })
     });
+  },
+
+  async getOpcionesMedicamento() {
+    return apiFetch('/medicamentos/opciones');
+  },
+
+  async getTratamientos() {
+    return apiFetch('/tratamientos');
   },
 
   async getMedicamentos() {
@@ -134,39 +200,20 @@ const API = {
     });
   },
 
+  async actualizarHorarioMedicamento(id, datos) {
+    return apiFetch(`/medicamentos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(datos)
+    });
+  },
+
   async eliminarMedicamento(id) {
     return apiFetch(`/medicamentos/${id}`, { method: 'DELETE' });
   },
 
-  // ==========================================
-  // TRATAMIENTOS Y CONSUMO
-  // ==========================================
-
-  async getTratamientoSemana() {
-    return apiFetch('/tratamientoSemana');
-  },
-
-  async crearTratamientoSemana(entrada) {
-    return apiFetch('/tratamientoSemana', {
-      method: 'POST',
-      body: JSON.stringify(entrada)
-    });
-  },
-
-  async eliminarTratamientoSemana(id) {
-    return apiFetch(`/tratamientoSemana/${id}`, { method: 'DELETE' });
-  },
-
-  async getRangos() {
-    return apiFetch('/rangos');
-  },
-
+  // Próxima toma
   async getProximaToma() {
     return apiFetch('/proximaToma');
-  },
-
-  async getConsumo() {
-    return apiFetch('/consumo');
   },
 
   // ==========================================
@@ -178,57 +225,43 @@ const API = {
     return apiFetch('/admin/usuarios');
   },
 
-  async getAdminUsuario(id) {
-    return apiFetch(`/admin/usuarios/${id}`);
+  async crearAdmin(usuario) {
+    return apiFetch('/admin/administradores', {
+      method: 'POST',
+      body: JSON.stringify(usuario)
+    });
   },
 
-  async actualizarUsuario(id, datos) {
-    return apiFetch(`/admin/usuarios/${id}`, {
+  async actualizarUsuario(idUsuario, datos) {
+    return apiFetch(`/admin/usuarios/${idUsuario}`, {
       method: 'PUT',
       body: JSON.stringify(datos)
     });
   },
 
-  async eliminarUsuario(id) {
-    return apiFetch(`/admin/usuarios/${id}`, {
+  async eliminarUsuario(idUsuario) {
+    return apiFetch(`/admin/usuarios/${idUsuario}`, {
       method: 'DELETE'
     });
   },
 
-  // --- Medicamentos ---
-  async getAdminMedicamentos() {
-    return apiFetch('/admin/medicamentos');
-  },
-
-  async actualizarMedicamento(id, datos) {
-    return apiFetch(`/admin/medicamentos/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(datos)
+  async cambiarEstadoUsuario(idUsuario, activo) {
+    return apiFetch(`/admin/usuarios/${idUsuario}/estado`, {
+      method: 'PATCH',
+      body: JSON.stringify({ activo })
     });
   },
 
-  async eliminarMedicamentoAdmin(id) {
-    return apiFetch(`/admin/medicamentos/${id}`, {
-      method: 'DELETE'
-    });
+  async getAdminResumen() {
+    return apiFetch('/admin/resumen');
   },
 
-  // --- Biomarcadores ---
-  async getAdminBiomarcadores() {
-    return apiFetch('/admin/biomarcadores');
+  async getAdminMedicamentosResumen() {
+    return apiFetch('/admin/medicamentos/resumen');
   },
 
-  async actualizarBiomarcador(id, datos) {
-    return apiFetch(`/admin/biomarcadores/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(datos)
-    });
-  },
-
-  async eliminarBiomarcador(id) {
-    return apiFetch(`/admin/biomarcadores/${id}`, {
-      method: 'DELETE'
-    });
+  async getAdminBiomarcadoresResumen() {
+    return apiFetch('/admin/biomarcadores/resumen');
   }
 
 };

@@ -42,9 +42,7 @@ function Registro() {
     setCargando(true)
 
     try {
-      console.log("Enviando datos al backend:", form)
-
-      const respuesta = await API.crearUsuario({
+      await API.crearUsuario({
         nombre: form.nombre,          
         apellido: form.apellido,       
         correo: form.correo,
@@ -55,7 +53,6 @@ function Registro() {
         telefono: form.telefono // <-- AGREGADO: Se envía al backend
       })
 
-      console.log("Respuesta del servidor:", respuesta)
       alert("¡Registro exitoso! Ahora puedes iniciar sesión.")
       navigate('/inicio-sesion') // Redirigir al inicio de sesión
 

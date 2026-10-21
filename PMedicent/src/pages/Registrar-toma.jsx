@@ -4,8 +4,15 @@ import Header from '../components/Header'
 import Footer from '../components/Footer'
 import API from '../api'
 
+const fechaLocalActual = () => {
+  const ahora = new Date()
+  return `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`
+}
+
 function RegistrarToma() {
   const navigate = useNavigate()
+  const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
+  const esCuidadorSinPaciente = usuario.perfil === 'cuidador' && usuario.pacienteVinculado !== true
   const [medicamentos, setMedicamentos] = useState([])
   const [mensajeExito, setMensajeExito] = useState(false)
   const [form, setForm] = useState({
@@ -35,13 +42,12 @@ function RegistrarToma() {
   e.preventDefault()
   try {
     const nuevaToma = {
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: fechaLocalActual(),
       hora: form.hora,
       dosis: form.dosis,
       nota: form.nota,
       estado: 'tomado',
-      idMedicamento: medicamentos.find(m => m.nombre === form.medicamento)?.id,
-      idPaciente: 1
+      idMedicamento: Number(form.medicamento),
     }
     await API.crearToma(nuevaToma)
     setMensajeExito(true)
@@ -60,6 +66,7 @@ function RegistrarToma() {
       <main>
         <div className="registrar-toma-page">
           <h2>Registrar Toma</h2>
+          {(esCuidadorSinPaciente || medicamentos.length === 0) && <p role="status">{esCuidadorSinPaciente ? 'Tu cuenta de cuidador aún no está vinculada a un paciente.' : 'Primero registra un medicamento en tu tratamiento.'} No se puede registrar una toma sin un medicamento asociado.</p>}
           <form onSubmit={handleSubmit} className="form-toma">
             <div className="campo-grupo" style={{ marginBottom: '16px' }}>
               <label htmlFor="medicamento">Medicamento</label>
@@ -71,7 +78,7 @@ function RegistrarToma() {
               >
                 <option value="">Seleccionar medicamento...</option>
                 {medicamentos.map(med => (
-                  <option key={med.id} value={med.nombre}>
+                  <option key={med.idMedicamento} value={med.idMedicamento}>
                     {med.nombre} ({med.dosis})
                   </option>
                 ))}
@@ -114,7 +121,7 @@ function RegistrarToma() {
               </div>
             </div>
 
-            <button type="submit" className="btn-confirmar">
+            <button type="submit" className="btn-confirmar" disabled={esCuidadorSinPaciente || medicamentos.length === 0}>
               Confirmar Toma
             </button>
 

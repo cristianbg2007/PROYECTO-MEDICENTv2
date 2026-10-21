@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import Header from '../components/Header'
 import Footer from '../components/Footer'
 import API from '../api'
@@ -10,6 +10,12 @@ const TIPOS = {
   glucosa: { label: 'Glucosa', unidad: 'mg/dL' }
 }
 
+const fechaHoraLocalActual = () => {
+  const ahora = new Date()
+  const fecha = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000)
+  return fecha.toISOString().slice(0, 16)
+}
+
 const RANGOS = {
   fc:      { min: 60,   max: 100,  unidad: 'lpm' },
   spo2:    { min: 95,   max: 100,  unidad: '%' },
@@ -19,6 +25,7 @@ const RANGOS = {
 
 function Biomarcadores() {
   const usuarioData = JSON.parse(localStorage.getItem('usuario') || '{}')
+  const esCuidadorSinPaciente = usuarioData.perfil === 'cuidador' && usuarioData.pacienteVinculado !== true
   const nombreCompleto = `${usuarioData.nombre || ''} ${usuarioData.apellido || ''}`.trim()
 
   const [biomarcadoresHoy, setBiomarcadoresHoy] = useState([])
@@ -34,18 +41,13 @@ function Biomarcadores() {
   const [form, setForm] = useState({
     tipo: '',
     valor: '',
-    fechaHora: new Date().toISOString().slice(0, 16),
+    fechaHora: fechaHoraLocalActual(),
     notas: ''
   })
   const [rangoInfo, setRangoInfo] = useState(null)
   const [errorForm, setErrorForm] = useState('')
 
-  useEffect(() => {
-    cargarDatos()
-  }, [])
-
-  const cargarDatos = async () => {
-    setCargando(true)
+  const cargarDatos = useCallback(async () => {
     try {
       const [hoyData, todosData] = await Promise.all([
         API.getBiomarcadoresHoy(),
@@ -58,7 +60,25 @@ function Biomarcadores() {
     } finally {
       setCargando(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    const cargarIniciales = async () => {
+      try {
+        const [hoyData, todosData] = await Promise.all([
+          API.getBiomarcadoresHoy(),
+          API.getBiomarcadores()
+        ])
+        setBiomarcadoresHoy(hoyData)
+        setBioMes(todosData)
+      } catch (err) {
+        console.error('Error cargando biomarcadores:', err)
+      } finally {
+        setCargando(false)
+      }
+    }
+    void cargarIniciales()
+  }, [])
 
   const calcularEstado = () => {
     if (biomarcadoresHoy.length === 0) return null
@@ -97,9 +117,7 @@ function Biomarcadores() {
     if (!form.tipo) { setErrorForm('Selecciona un tipo de biomarcador.'); return }
     if (!form.valor) { setErrorForm('Ingresa un valor.'); return }
 
-    const dt = new Date(form.fechaHora)
-    const fecha = dt.toISOString().split('T')[0]
-    const hora = dt.toTimeString().slice(0, 5)
+    const [fecha, hora] = form.fechaHora.split('T')
     const valor = parseFloat(form.valor)
     const estado = getEstadoBio(form.tipo, valor)
 
@@ -116,7 +134,7 @@ function Biomarcadores() {
         notas: form.notas
       })
       setModalAbierto(false)
-      setForm({ tipo: '', valor: '', fechaHora: new Date().toISOString().slice(0, 16), notas: '' })
+      setForm({ tipo: '', valor: '', fechaHora: fechaHoraLocalActual(), notas: '' })
       setRangoInfo(null)
       await cargarDatos()
     } catch (err) {
@@ -154,9 +172,10 @@ function Biomarcadores() {
           </div>
 
           <h1 className="tratamiento-titulo">Biomarcadores</h1>
+          {esCuidadorSinPaciente && <p role="status">Tu cuenta de cuidador todavía no está vinculada a un paciente; por eso no hay mediciones que mostrar ni se pueden registrar.</p>}
 
           <div className="text-center">
-            <button className="btn-registrar" onClick={() => setModalAbierto(true)}>
+            <button className="btn-registrar" disabled={esCuidadorSinPaciente} onClick={() => setModalAbierto(true)}>
               <img src="https://img.icons8.com/ios-filled/24/ffffff/plus.png" alt="add" />
               Registrar Nuevo Biomarcador
             </button>
@@ -181,7 +200,7 @@ function Biomarcadores() {
                 <p style={{ color: '#888' }}>No hay mediciones registradas hoy.</p>
               ) : (
                 biomarcadoresHoy.map(b => (
-                  <div key={b.id} className={`medicion-item estado-${b.estado}`}>
+                  <div key={b.idBiomarcador} className={`medicion-item estado-${b.estado}`}>
                     <div className="medicion-nombre">{b.nombre}</div>
                     <div className="medicion-valor">
                       <span className="valor-num">{b.valor}</span>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import Header from '../components/Header'
 import Footer from '../components/Footer'
@@ -18,6 +18,29 @@ function AdminUsuarios() {
     password: ''
   })
   const [mensaje, setMensaje] = useState('')
+  const [guardandoAdmin, setGuardandoAdmin] = useState(false)
+  const [nuevoAdmin, setNuevoAdmin] = useState({
+    nombre: '',
+    apellido: '',
+    correo: '',
+    telefono: '',
+    documento: '',
+    fechaNacimiento: '',
+    idTipoDocumento: '1',
+    password: ''
+  })
+
+  const cargarUsuarios = useCallback(async () => {
+    try {
+      const data = await API.getAdminUsuarios()
+      setUsuarios(data || [])
+    } catch (error) {
+      console.error(error)
+      setMensaje('Error al cargar usuarios: ' + error.message)
+    } finally {
+      setCargando(false)
+    }
+  }, [])
 
   useEffect(() => {
     const userData = localStorage.getItem('usuario')
@@ -31,24 +54,22 @@ function AdminUsuarios() {
       navigate('/dashboard')
       return
     }
-    cargarUsuarios()
+    const cargarIniciales = async () => {
+      try {
+        const data = await API.getAdminUsuarios()
+        setUsuarios(data || [])
+      } catch (error) {
+        console.error(error)
+        setMensaje('Error al cargar usuarios: ' + error.message)
+      } finally {
+        setCargando(false)
+      }
+    }
+    void cargarIniciales()
   }, [navigate])
 
-  const cargarUsuarios = async () => {
-    try {
-      setCargando(true)
-      const data = await API.getAdminUsuarios()
-      setUsuarios(data || [])
-    } catch (error) {
-      console.error(error)
-      setMensaje('Error al cargar usuarios: ' + error.message)
-    } finally {
-      setCargando(false)
-    }
-  }
-
   const empezarEdicion = (usuario) => {
-    setEditando(usuario.id)
+    setEditando(usuario.idUsuario)
     setForm({
       nombre: usuario.nombre || '',
       apellido: usuario.apellido || '',
@@ -96,6 +117,38 @@ function AdminUsuarios() {
     }
   }
 
+  const handleNuevoAdminChange = (e) => {
+    setNuevoAdmin({ ...nuevoAdmin, [e.target.name]: e.target.value })
+  }
+
+  const crearAdministrador = async (e) => {
+    e.preventDefault()
+    setGuardandoAdmin(true)
+    setMensaje('')
+
+    try {
+      const respuesta = await API.crearAdmin({
+        ...nuevoAdmin,
+        idTipoDocumento: Number(nuevoAdmin.idTipoDocumento)
+      })
+      setMensaje(respuesta?.message || 'Administrador creado correctamente')
+      setNuevoAdmin({
+        nombre: '',
+        apellido: '',
+        correo: '',
+        telefono: '',
+        documento: '',
+        fechaNacimiento: '',
+        idTipoDocumento: '1',
+        password: ''
+      })
+      await cargarUsuarios()
+    } catch (error) {
+      setMensaje('Error al crear administrador: ' + error.message)
+    } finally {
+      setGuardandoAdmin(false)
+    }
+  }
   return (
     <>
       <Header />
@@ -107,6 +160,29 @@ function AdminUsuarios() {
           </Link>
         </div>
 
+        <section style={{ marginBottom: '28px', padding: '20px', background: '#f5f8fb', borderRadius: '8px', border: '1px solid #d7e0e8' }}>
+          <h2 style={{ marginBottom: '14px' }}>Crear administrador</h2>
+          <form onSubmit={crearAdministrador}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px' }}>
+              <label>Nombre<input name="nombre" value={nuevoAdmin.nombre} onChange={handleNuevoAdminChange} style={inputStyle} required /></label>
+              <label>Apellido<input name="apellido" value={nuevoAdmin.apellido} onChange={handleNuevoAdminChange} style={inputStyle} required /></label>
+              <label>Correo<input name="correo" type="email" value={nuevoAdmin.correo} onChange={handleNuevoAdminChange} style={inputStyle} required /></label>
+              <label>Documento<input name="documento" value={nuevoAdmin.documento} onChange={handleNuevoAdminChange} style={inputStyle} required /></label>
+              <label>Teléfono<input name="telefono" type="tel" value={nuevoAdmin.telefono} onChange={handleNuevoAdminChange} style={inputStyle} /></label>
+              <label>Fecha de nacimiento<input name="fechaNacimiento" type="date" value={nuevoAdmin.fechaNacimiento} onChange={handleNuevoAdminChange} style={inputStyle} required /></label>
+              <label>Tipo de documento
+                <select name="idTipoDocumento" value={nuevoAdmin.idTipoDocumento} onChange={handleNuevoAdminChange} style={inputStyle} required>
+                  <option value="1">Cédula de Ciudadanía</option>
+                </select>
+              </label>
+              <label>Contraseña inicial<input name="password" type="password" minLength="6" value={nuevoAdmin.password} onChange={handleNuevoAdminChange} style={inputStyle} required /></label>
+            </div>
+            <button type="submit" disabled={guardandoAdmin} style={{ ...btnGuardar, marginTop: '14px', padding: '9px 14px' }}>
+              {guardandoAdmin ? 'Creando...' : 'Crear administrador'}
+            </button>
+          </form>
+        </section>
+        <p style={{ color: '#526174' }}>Las cuentas con historial clínico se pueden desactivar para quitarles el acceso sin borrar sus datos.</p>
         {mensaje && (
           <div style={{
             padding: '12px',
@@ -135,15 +211,16 @@ function AdminUsuarios() {
                   <th style={thStyle}>Teléfono</th>
                   <th style={thStyle}>Documento</th>
                   <th style={thStyle}>Rol</th>
+                  <th style={thStyle}>Estado</th>
                   <th style={thStyle}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {usuarios.map((u) => (
-                  <tr key={u.id} style={{ borderBottom: '1px solid #dee2e6' }}>
-                    {editando === u.id ? (
+                  <tr key={u.idUsuario} style={{ borderBottom: '1px solid #dee2e6' }}>
+                    {editando === u.idUsuario ? (
                       <>
-                        <td style={tdStyle}>{u.id}</td>
+                        <td style={tdStyle}>{u.idUsuario}</td>
                         <td style={tdStyle}>
                           <input name="nombre" value={form.nombre} onChange={handleChange} style={inputStyle} />
                         </td>
@@ -160,8 +237,9 @@ function AdminUsuarios() {
                           <input name="documento" value={form.documento} onChange={handleChange} style={inputStyle} />
                         </td>
                         <td style={tdStyle}>{u.rol}</td>
+                        <td style={tdStyle}>{u.activo ? 'Activa' : 'Inactiva'}</td>
                         <td style={tdStyle}>
-                          <button onClick={() => guardarCambios(u.id)} style={btnGuardar}>Guardar</button>
+                          <button onClick={() => guardarCambios(u.idUsuario)} style={btnGuardar}>Guardar</button>
                           <button onClick={cancelarEdicion} style={btnCancelar}>Cancelar</button>
                           <div style={{ marginTop: '6px' }}>
                             <input
@@ -177,7 +255,7 @@ function AdminUsuarios() {
                       </>
                     ) : (
                       <>
-                        <td style={tdStyle}>{u.id}</td>
+                        <td style={tdStyle}>{u.idUsuario}</td>
                         <td style={tdStyle}>{u.nombre}</td>
                         <td style={tdStyle}>{u.apellido}</td>
                         <td style={tdStyle}>{u.correo}</td>
@@ -195,8 +273,34 @@ function AdminUsuarios() {
                           </span>
                         </td>
                         <td style={tdStyle}>
+                          <span style={{ color: u.activo ? '#176b3a' : '#9b2c2c', fontWeight: 600 }}>
+                            {u.activo ? 'Activa' : 'Inactiva'}
+                          </span>
+                        </td>
+                        <td style={tdStyle}>
                           <button onClick={() => empezarEdicion(u)} style={btnEditar}>Editar</button>
-                          <button onClick={() => eliminar(u.id, u.nombre)} style={btnEliminar}>Eliminar</button>
+                          {u.rol !== 'admin' && <button
+                            onClick={async () => {
+                              const accion = u.activo ? 'desactivar' : 'reactivar'
+                              if (!window.confirm(`¿Quieres ${accion} la cuenta de ${u.nombre}?`)) return
+                              try {
+                                const resultado = await API.cambiarEstadoUsuario(u.idUsuario, !u.activo)
+                                setMensaje(resultado.message)
+                                await cargarUsuarios()
+                              } catch (error) {
+                                setMensaje('Error al cambiar estado: ' + error.message)
+                              }
+                            }}
+                            style={u.activo ? btnCancelar : btnGuardar}
+                          >{u.activo ? 'Desactivar' : 'Reactivar'}</button>}
+                          <button
+                            onClick={() => eliminar(u.idUsuario, u.nombre)}
+                            disabled={u.rol === 'admin' || Boolean(u.perfil)}
+                            title={u.rol === 'admin' ? 'No se eliminan administradores desde esta pantalla' : u.perfil ? 'Se conserva el historial de las cuentas con perfil de salud' : ''}
+                            style={{ ...btnEliminar, opacity: u.rol === 'admin' || Boolean(u.perfil) ? 0.5 : 1, cursor: u.rol === 'admin' || Boolean(u.perfil) ? 'not-allowed' : 'pointer' }}
+                          >
+                            Eliminar
+                          </button>
                         </td>
                       </>
                     )}

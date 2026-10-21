@@ -4,11 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import API from '../api';
+import VinculacionCuidador from '../components/VinculacionCuidador';
 
 function SesionIniciada() {
   const navigate = useNavigate();
   const [horaActual, setHoraActual] = useState('');
-  const [usuario, setUsuario] = useState(null);
+  const [usuario, setUsuario] = useState(() => JSON.parse(localStorage.getItem('usuario') || 'null'));
+  const esCuidadorSinPaciente = usuario?.perfil === 'cuidador' && usuario?.pacienteVinculado !== true
   const [proximaToma, setProximaToma] = useState(null);
   const [tomasHoy, setTomasHoy] = useState([]);
 
@@ -25,15 +27,39 @@ function SesionIniciada() {
     return () => clearInterval(interval);
   }, []);
 
-  // Cargar usuario desde localStorage
-  useEffect(() => {
-    const userData = localStorage.getItem('usuario');
-    if (!userData) {
-      navigate('/inicio-sesion');
-      return;
+  const actualizarUsuario = async () => {
+    const respuesta = await API.getPerfil()
+    const actualizado = respuesta.user || respuesta.usuario
+    if (actualizado) {
+      localStorage.setItem('usuario', JSON.stringify(actualizado))
+      setUsuario(actualizado)
+      const [tomas, proxima] = await Promise.allSettled([API.getTomasHoy(), API.getProximaToma()])
+      if (tomas.status === 'fulfilled') setTomasHoy(tomas.value)
+      if (proxima.status === 'fulfilled') setProximaToma(proxima.value)
     }
-    setUsuario(JSON.parse(userData));
-  }, []);
+  }
+
+  useEffect(() => {
+    if (!localStorage.getItem('token')) return
+    let activo = true
+    API.getPerfil()
+      .then((respuesta) => {
+        const actualizado = respuesta.user || respuesta.usuario
+        if (activo && actualizado) {
+          localStorage.setItem('usuario', JSON.stringify(actualizado))
+          setUsuario(actualizado)
+        }
+      })
+      .catch((error) => console.error('No se pudo actualizar el perfil:', error))
+    return () => { activo = false }
+  }, [])
+
+  // Redirigir a quien no tiene sesión activa.
+  useEffect(() => {
+    if (!localStorage.getItem('usuario')) {
+      navigate('/inicio-sesion');
+    }
+  }, [navigate]);
 
   // Cargar datos del dashboard (separados para que uno no bloquee al otro)
   useEffect(() => {
@@ -46,7 +72,7 @@ function SesionIniciada() {
         console.error('Error al cargar tomas:', error);
       }
 
-      // Próxima toma (endpoint aún no existe, se ignora sin romper el dashboard)
+      // Próxima toma del tratamiento activo
       try {
         const proxData = await API.getProximaToma();
         setProximaToma(proxData);
@@ -73,6 +99,9 @@ function SesionIniciada() {
           <div className="reloj">{horaActual || '00:00'}</div>
         </div>
 
+        {esCuidadorSinPaciente && <p role="status">Tu cuenta de cuidador aún no está vinculada a un paciente. El panel se muestra igual, pero no habrá datos clínicos hasta completar esa vinculación.</p>}
+        <VinculacionCuidador usuario={usuario} onVinculacionCambiada={actualizarUsuario} />
+
         {proximaToma ? (
           <div className="proxima-toma">
             <p className="etiqueta">Siguiente toma</p>
@@ -85,7 +114,7 @@ function SesionIniciada() {
           </div>
         ) : (
           <div className="proxima-toma">
-            <p>No tienes tomas pendientes registradas.</p>
+            <p>{esCuidadorSinPaciente ? 'Aún no hay un paciente vinculado para mostrar sus próximas tomas.' : 'No tienes tomas pendientes registradas.'}</p>
           </div>
         )}
 
@@ -93,8 +122,12 @@ function SesionIniciada() {
           <div className="acciones-grid">
             <Link to="/registrar-toma" className="btn-accion">Registrar Toma</Link>
             <Link to="/tratamiento" className="btn-accion">Ver Tratamiento</Link>
+            <Link to="/reportes" className="btn-accion">Reportes</Link>
+            <Link to="/inventario" className="btn-accion">Inventario</Link>
+            <Link to="/historial-tomas" className="btn-accion">Historial de tomas</Link>
             <Link to="/tomar-biomarcadores" className="btn-accion">Biomarcadores</Link>
             <Link to="/editar-perfil" className="btn-accion">Editar Perfil</Link>
+            {usuario?.perfil === 'cuidador' && <Link to="/perfil-cuidador" className="btn-accion">Mi perfil de cuidador</Link>}
           </div>
         </div>
 
@@ -119,7 +152,7 @@ function SesionIniciada() {
             <p>No se han registrado tomas el día de hoy.</p>
           ) : (
             tomasHoy.map((toma) => (
-              <div key={toma.id}>
+              <div key={toma.idToma}>
                 <div className="medicamento-item">
                   <h3>{toma.medicamento}:</h3>
                   <p><strong>Vía:</strong> {toma.via}</p>

@@ -21,25 +21,19 @@ function InicioSesion() {
 
     try {
       const respuesta = await API.login(form.correo, form.contrasena)
-      console.log('Login exitoso:', respuesta)
-
-      // Se guarda el token recibido
       const token = respuesta.access_token || respuesta.accessToken || respuesta.token
-      if (token) {
-        localStorage.setItem('token', token)
+      const usuario = respuesta.user || respuesta.usuario
+
+      if (!token || !usuario || !['admin', 'usuario'].includes(usuario.rol)) {
+        throw new Error('El servidor no devolvió un usuario y un rol válidos.')
       }
-      
-      if (respuesta.user || respuesta.usuario) {
-        const usuarioGuardar = respuesta.user || respuesta.usuario
-        localStorage.setItem('usuario', JSON.stringify(usuarioGuardar))
-        
-        // Redirección según el rol
-        if (usuarioGuardar.rol === 'admin') {
-          window.location.href = '/admin'
-        } else {
-          window.location.href = '/dashboard'
-        }
-      }
+
+      localStorage.setItem('token', token)
+      localStorage.setItem('usuario', JSON.stringify(usuario))
+      const destino = usuario.rol === 'admin'
+        ? '/admin'
+        : (usuario.perfil ? '/dashboard' : '/elegir-rol')
+      window.location.href = destino
     } catch (err) {
       console.error('Error en el inicio de sesión:', err)
       setError(err.message || 'Correo o contraseña incorrectos.')
@@ -52,7 +46,7 @@ function InicioSesion() {
     <TarjetaFormulario titulo="Inicio de Sesión" onSubmit={handleSubmit}>
       <CampoTexto label="Correo" id="correo" type="email" placeholder="ejemplo@gmail.com" required value={form.correo} onChange={handleChange} />
       <CampoTexto label="Contraseña" id="contrasena" type="password" placeholder="Ingrese la contraseña" required value={form.contrasena} onChange={handleChange} />
-      <a href="#">¿Olvidaste tu contraseña?</a>
+      <Link to="/recuperar-contrasena">¿Olvidaste tu contraseña?</Link>
       {error && <p style={{ color: 'red', fontSize: '0.9rem', marginTop: '4px' }}>{error}</p>}
       <Button texto={cargando ? 'Ingresando...' : 'Ingresar'} />
       <p>¿No tienes cuenta? <Link to="/registro">Regístrate</Link></p>
